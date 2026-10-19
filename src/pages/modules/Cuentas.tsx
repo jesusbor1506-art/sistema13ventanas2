@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Plus,
   HandCoins,
@@ -15,8 +15,11 @@ import {
   ShoppingCart,
   Printer,
   FileText,
+  FileSpreadsheet,
+  ShieldAlert,
 } from 'lucide-react';
 import { useStore } from '@/context/StoreContext';
+import { useAuth } from '@/context/AuthContext';
 import type { Cuenta } from '@/types/cuenta';
 import type { CartItem, Product } from '@/types/product';
 
@@ -49,7 +52,9 @@ function getItemLivePrice(item: CartItem, products: Product[]): number {
 }
 
 export default function Cuentas() {
-  const { cuentas, addCuenta, abonarCuenta, tasaBs, calcularDeudaTotal, products } = useStore();
+  const { cuentas, addCuenta, abonarCuenta, tasaBs, calcularDeudaTotal, products, exportarDeudoresExcel, logoBase64 } = useStore();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>('cobrar');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -197,7 +202,7 @@ export default function Cuentas() {
         </div>
       </div>
 
-      {/* Tabs + New button */}
+      {/* Tabs + New button + Export Excel (admin) */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6 print:hidden">
         <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-md border border-gray-100">
           {(Object.keys(tabConfig) as TabType[]).map((tab) => {
@@ -226,6 +231,17 @@ export default function Cuentas() {
             );
           })}
         </div>
+
+        {user?.role === 'admin' && (
+          <button
+            onClick={exportarDeudoresExcel}
+            disabled={cuentas.filter((c) => c.tipo === 'cobrar' && c.estado === 'pendiente').length === 0}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Exportar Deudas a Excel
+          </button>
+        )}
 
         <button
           onClick={() => setShowNewModal(true)}
@@ -415,56 +431,100 @@ export default function Cuentas() {
         </div>
       )}
 
-      {/* Print: Nota de Entrega (NO prices) */}
+      {/* Print: Nota de Entrega — Diseño Gráfico Premium */}
       {notaCuenta && (
         <div className="hidden print:block absolute top-0 left-0 w-full h-full bg-white text-black p-8">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
-              <div>
-                <h1 className="text-2xl font-bold">Nota de Entrega</h1>
-                <p className="text-sm text-gray-600 mt-1">Documento sin valor fiscal</p>
-              </div>
-              <FileText className="w-12 h-12 text-gray-400" />
-            </div>
+          <div className="max-w-3xl mx-auto relative">
+            {/* Decorative bubbles */}
+            <div className="absolute -top-4 -right-4 w-32 h-32 rounded-full" style={{ backgroundColor: '#FFC300', opacity: 0.3 }} />
+            <div className="absolute top-10 -left-6 w-24 h-24 rounded-full" style={{ backgroundColor: '#2563EB', opacity: 0.2 }} />
+            <div className="absolute -bottom-2 right-10 w-20 h-20 rounded-full" style={{ backgroundColor: '#FFC300', opacity: 0.2 }} />
 
-            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-              <div>
-                <p className="text-xs text-gray-500 uppercase">Cliente</p>
-                <p className="font-semibold text-base">{notaCuenta.titular}</p>
-                {notaCuenta.telefono && <p className="text-gray-600">{notaCuenta.telefono}</p>}
+            <div className="relative">
+              {/* Logo + Title */}
+              <div className="flex flex-col items-center mb-6">
+                {logoBase64 ? (
+                  <img src={logoBase64} alt="Logo" className="h-20 w-auto mb-3 object-contain" />
+                ) : (
+                  <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#D4AF37' }}>
+                    <FileText className="w-8 h-8 text-white" />
+                  </div>
+                )}
+                <span
+                  className="px-6 py-1.5 rounded-full text-sm font-bold tracking-widest text-white uppercase"
+                  style={{ backgroundColor: '#2e1065' }}
+                >
+                  Nota de Entrega
+                </span>
+                <p className="text-xs text-gray-500 mt-2">Documento sin valor fiscal</p>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500 uppercase">Fecha y Hora</p>
-                <p className="font-semibold">{notaCuenta.fecha}</p>
-              </div>
-            </div>
 
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b-2 border-gray-300">
-                  <th className="text-left py-2 px-3 font-semibold">Producto</th>
-                  <th className="text-center py-2 px-3 font-semibold">Cantidad</th>
-                  <th className="text-left py-2 px-3 font-semibold">Fecha del Ítem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notaCuenta.items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-gray-200">
-                    <td className="py-2 px-3">{item.product.name}</td>
-                    <td className="py-2 px-3 text-center">{item.quantity}</td>
-                    <td className="py-2 px-3 text-gray-600">{notaCuenta.fecha}</td>
+              {/* Client info with colored underlines */}
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Nombre</p>
+                  <p className="font-bold text-base pb-1 border-b-2" style={{ borderColor: '#2563EB' }}>{notaCuenta.titular}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Teléfono</p>
+                  <p className="font-bold text-base pb-1 border-b-2" style={{ borderColor: '#2563EB' }}>
+                    {notaCuenta.telefono || '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Table with colored headers */}
+              <table className="w-full text-sm border-collapse mb-6">
+                <thead>
+                  <tr>
+                    <th className="text-center py-2 px-3 font-bold text-black" style={{ backgroundColor: '#FFC300' }}>
+                      CANTIDAD
+                    </th>
+                    <th className="text-left py-2 px-3 font-bold text-white" style={{ backgroundColor: '#0EA5E9' }}>
+                      ARTÍCULOS
+                    </th>
+                    <th className="text-center py-2 px-3 font-bold text-white" style={{ backgroundColor: '#2e1065' }}>
+                      FECHA Y HORA
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {notaCuenta.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-200">
+                      <td className="py-2 px-3 text-center font-semibold">{item.quantity}</td>
+                      <td className="py-2 px-3 font-medium">{item.product.name}</td>
+                      <td className="py-2 px-3 text-center text-gray-600">{notaCuenta.fecha}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            <div className="mt-12 pt-8 border-t border-gray-300 text-center">
-              <p className="text-sm text-gray-500">Firma del Cliente</p>
-              <div className="border-b border-gray-400 mx-auto mt-16 w-64" />
-            </div>
+              {/* Observaciones */}
+              <div className="mb-6">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Observaciones</p>
+                <div className="space-y-3">
+                  <div className="border-b border-gray-300" />
+                  <div className="border-b border-gray-300" />
+                  <div className="border-b border-gray-300" />
+                </div>
+              </div>
 
-            <div className="mt-8 text-center text-xs text-gray-400">
-              Este documento no contiene precios ni montos. Solo refleja los productos entregados.
+              {/* Entregado por */}
+              <div className="mb-8">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Entregado por</p>
+                <div className="border-b-2 border-gray-400 w-64" />
+              </div>
+
+              {/* Signature line */}
+              <div className="text-center mb-6">
+                <p className="text-sm text-gray-500">Firma del Cliente</p>
+                <div className="border-b border-gray-400 mx-auto mt-12 w-64" />
+              </div>
+
+              {/* Footer */}
+              <p className="text-center text-sm italic font-medium" style={{ color: '#2e1065' }}>
+                Gracias por confiar en SuminOfica
+              </p>
             </div>
           </div>
         </div>

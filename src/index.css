@@ -57,3 +57,10 @@ body {
 .animate-in {
   animation: animate-in 0.2s ease-out;
 }
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

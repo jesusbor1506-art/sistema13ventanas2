@@ -45,7 +45,7 @@ export const navItems: NavItem[] = [
     label: 'Ventas y Ganancias',
     path: '/ventas-ganancias',
     icon: TrendingUp,
-    adminOnly: false,
+    adminOnly: true,
     description: 'Reportes diarios, cálculo de utilidad y exportación a ticket/PDF',
   },
   {
@@ -61,7 +61,7 @@ export const navItems: NavItem[] = [
     label: 'Proveedores',
     path: '/proveedores',
     icon: Truck,
-    adminOnly: false,
+    adminOnly: true,
     description: 'Carpetas de proveedores y tabla comparativa de costos',
   },
   {

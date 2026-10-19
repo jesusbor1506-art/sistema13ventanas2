@@ -1,6 +1,15 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import * as XLSX from 'xlsx';
 import type { Product, CartItem } from '@/types/product';
 import type { Cuenta, Ingreso, CierreDiario } from '@/types/cuenta';
+
+export interface KardexEntry {
+  id: string;
+  fecha: string;
+  accion: 'precio' | 'stock' | 'eliminar';
+  detalle: string;
+  usuario: string;
+}
 
 function safeNum(v: string | number | undefined, fallback = 0): number {
   if (v === undefined) return fallback;
@@ -61,6 +70,12 @@ interface StoreContextValue {
 
   cierresDiarios: CierreDiario[];
   cerrarJornada: (cierre: CierreDiario) => void;
+
+  logoBase64: string | null;
+  setLogo: (base64: string | null) => void;
+  kardex: KardexEntry[];
+  registrarKardex: (accion: KardexEntry['accion'], detalle: string) => void;
+  exportarDeudoresExcel: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -150,6 +165,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
   const [cierresDiarios, setCierresDiarios] = useState<CierreDiario[]>(() => {
     const raw = localStorage.getItem('erp_cierres');
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        // fall through
+      }
+    }
+    return [];
+  });
+  const [logoBase64, setLogoBase64] = useState<string | null>(() => {
+    return localStorage.getItem('erp_logo_base64') || null;
+  });
+  const [kardex, setKardex] = useState<KardexEntry[]>(() => {
+    const raw = localStorage.getItem('erp_kardex');
     if (raw) {
       try {
         return JSON.parse(raw);
@@ -297,6 +326,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return productSellPrice(p);
   };
 
+  const setLogo = (base64: string | null) => {
+    setLogoBase64(base64);
+    if (base64) {
+      localStorage.setItem('erp_logo_base64', base64);
+    } else {
+      localStorage.removeItem('erp_logo_base64');
+    }
+  };
+
+  const registrarKardex = (accion: KardexEntry['accion'], detalle: string) => {
+    const entrada: KardexEntry = {
+      id: `kx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      fecha: new Date().toLocaleString('es-VE'),
+      accion,
+      detalle,
+      usuario: 'admin',
+    };
+    const next = [entrada, ...kardex];
+    setKardex(next);
+    localStorage.setItem('erp_kardex', JSON.stringify(next));
+  };
+
+  const exportarDeudoresExcel = () => {
+    const deudores = cuentas
+      .filter((c) => c.tipo === 'cobrar' && c.estado === 'pendiente')
+      .map((c) => {
+        const deuda = calcularDeudaTotal(c, products);
+        return {
+          Titular: c.titular,
+          'Teléfono': c.telefono || '',
+          'Deuda Total USD': deuda.toFixed(2),
+          'Abonado USD': c.abono.toFixed(2),
+          'Restante USD': (deuda - c.abono).toFixed(2),
+          Estado: c.estado,
+          Fecha: c.fecha,
+          'Cantidad de Items': c.items.length,
+        };
+      });
+    if (deudores.length === 0) return;
+    const ws = XLSX.utils.json_to_sheet(deudores);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Deudores');
+    XLSX.writeFile(wb, 'Deudores_SuminOfica.xlsx');
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -320,6 +394,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         registrarIngreso,
         cierresDiarios,
         cerrarJornada,
+        logoBase64,
+        setLogo,
+        kardex,
+        registrarKardex,
+        exportarDeudoresExcel,
       }}
     >
       {children}

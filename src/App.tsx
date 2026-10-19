@@ -34,9 +34,23 @@ export default function App() {
             >
               <Route path="/inventario" element={<Inventario />} />
               <Route path="/ventas" element={<Ventas />} />
-              <Route path="/ventas-ganancias" element={<Ganancias />} />
+              <Route
+                path="/ventas-ganancias"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <Ganancias />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/tendencias" element={<Tendencias />} />
-              <Route path="/proveedores" element={<Proveedores />} />
+              <Route
+                path="/proveedores"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <Proveedores />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/clientes" element={<Clientes />} />
               <Route
                 path="/contabilidad"

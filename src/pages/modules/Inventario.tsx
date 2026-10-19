@@ -33,6 +33,7 @@ export default function Inventario() {
     addManyProducts,
     updateProduct,
     deleteProduct,
+    registrarKardex,
   } = useStore();
 
   const [search, setSearch] = useState('');
@@ -87,6 +88,34 @@ export default function Inventario() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleUpdateField = (id: string, field: 'barcode' | 'name' | 'stock' | 'priceBuy' | 'gainPct', value: string, product: Product) => {
+    if (field === 'stock') {
+      const oldVal = product.stock;
+      const newVal = safeNum(value);
+      if (oldVal !== newVal) {
+        registrarKardex('stock', `${product.name}: ${oldVal} → ${newVal} unidades`);
+      }
+    } else if (field === 'priceBuy') {
+      const oldVal = safeNum(product.priceBuy);
+      const newVal = safeNum(value);
+      if (oldVal !== newVal) {
+        registrarKardex('precio', `${product.name}: ${oldVal.toFixed(2)} → ${newVal.toFixed(2)}`);
+      }
+    } else if (field === 'gainPct') {
+      const oldVal = safeNum(product.gainPct);
+      const newVal = safeNum(value);
+      if (oldVal !== newVal) {
+        registrarKardex('precio', `${product.name}: % ganancia ${oldVal} → ${newVal}`);
+      }
+    }
+    updateProduct(id, { [field]: field === 'barcode' || field === 'name' ? value : safeNum(value) });
+  };
+
+  const handleDelete = (product: Product) => {
+    registrarKardex('eliminar', `${product.name} (Cod: ${product.barcode || 'N/A'})`);
+    deleteProduct(product.id);
+  };
 
   const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
@@ -278,7 +307,7 @@ export default function Inventario() {
                         <input
                           type="text"
                           value={p.barcode}
-                          onChange={(e) => updateProduct(p.id, { barcode: e.target.value })}
+                          onChange={(e) => handleUpdateField(p.id, 'barcode', e.target.value, p)}
                           className="w-32 font-mono text-xs px-2 py-1 border border-gray-200 rounded bg-gray-50 hover:bg-gold-50 focus:outline-none focus:ring-1 focus:ring-gold-400 focus:border-transparent transition-colors"
                         />
                       </div>
@@ -287,7 +316,7 @@ export default function Inventario() {
                       <input
                         type="text"
                         value={p.name}
-                        onChange={(e) => updateProduct(p.id, { name: e.target.value })}
+                        onChange={(e) => handleUpdateField(p.id, 'name', e.target.value, p)}
                         className="w-full min-w-[330px] font-medium text-gray-700 px-2 py-1 border border-gray-200 rounded bg-gray-50 hover:bg-gold-50 focus:outline-none focus:ring-1 focus:ring-gold-400 focus:border-transparent transition-colors"
                       />
                     </td>
@@ -295,7 +324,7 @@ export default function Inventario() {
                       <input
                         type="number"
                         value={p.stock}
-                        onChange={(e) => updateProduct(p.id, { stock: safeNum(e.target.value) })}
+                        onChange={(e) => handleUpdateField(p.id, 'stock', e.target.value, p)}
                         className={`w-16 text-center px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gold-400 transition-colors
                           ${isLowStock
                             ? 'border-red-300 text-red-600 font-bold bg-red-50'
@@ -307,7 +336,7 @@ export default function Inventario() {
                         type="number"
                         step="0.01"
                         value={p.priceBuy}
-                        onChange={(e) => updateProduct(p.id, { priceBuy: safeNum(e.target.value) })}
+                        onChange={(e) => handleUpdateField(p.id, 'priceBuy', e.target.value, p)}
                         className="w-20 text-right px-2 py-1 border border-gray-200 rounded text-sm bg-gray-50 hover:bg-gold-50 focus:outline-none focus:ring-1 focus:ring-gold-400 focus:border-transparent transition-colors"
                       />
                     </td>
@@ -316,7 +345,7 @@ export default function Inventario() {
                         type="number"
                         step="0.01"
                         value={p.gainPct}
-                        onChange={(e) => updateProduct(p.id, { gainPct: safeNum(e.target.value) })}
+                        onChange={(e) => handleUpdateField(p.id, 'gainPct', e.target.value, p)}
                         className="w-16 text-center px-2 py-1 border border-gray-200 rounded text-sm bg-gray-50 hover:bg-gold-50 focus:outline-none focus:ring-1 focus:ring-gold-400 focus:border-transparent transition-colors"
                       />
                     </td>
@@ -325,7 +354,7 @@ export default function Inventario() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
-                        onClick={() => deleteProduct(p.id)}
+                        onClick={() => handleDelete(p)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
                         title="Eliminar"
                       >

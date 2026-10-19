@@ -16,8 +16,10 @@ import {
   Power,
   Percent,
   FileText,
+  ShieldAlert,
 } from 'lucide-react';
 import { useStore } from '@/context/StoreContext';
+import { useAuth } from '@/context/AuthContext';
 import type { CierreDiario } from '@/types/cuenta';
 
 function safeNum(v: string | number | undefined, fallback = 0): number {
@@ -30,6 +32,19 @@ const POS_COMMISSION = 0.025;
 
 export default function Ganancias() {
   const { ingresos, tasaBs, cerrarJornada } = useStore();
+  const { user } = useAuth();
+
+  if (user?.role === 'cajero') {
+    return (
+      <div className="p-8 max-w-md mx-auto text-center print:hidden">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-xl font-bold text-gray-800 mb-2">Acceso Denegado</h1>
+        <p className="text-sm text-gray-500">Solo los Administradores pueden acceder al módulo de Ventas y Ganancias.</p>
+      </div>
+    );
+  }
 
   const [showCierreModal, setShowCierreModal] = useState(false);
   const [printFormat, setPrintFormat] = useState<'a4' | 'ticket' | null>(null);
