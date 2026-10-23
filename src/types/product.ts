@@ -13,6 +13,8 @@ export interface CartItem {
   product: Product;
   quantity: number;
   isBulto: boolean;
+  id?: string;
+  pagado?: boolean;
 }
 
 export type PaymentMethod = 'divisas' | 'efectivo' | 'punto' | 'movil' | 'combinado' | 'deudores';

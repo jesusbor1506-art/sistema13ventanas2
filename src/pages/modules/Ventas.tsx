@@ -4,6 +4,7 @@ import {
   ScanLine,
   Trash2,
   X,
+  Plus as PlusIcon,
   Package as PackageIcon,
   DollarSign,
   CreditCard,
@@ -45,12 +46,11 @@ function getUnitPrice(item: CartItem): number {
 const MAYOR_THRESHOLD = 6;
 
 export default function Ventas() {
-  const { products, tasaBs, tasaPts, reduceStock, cuentas, addCuenta, registrarIngreso } = useStore();
+  const { products, tasaBs, tasaPts, reduceStock, cuentas, addCuenta, registrarIngreso, ticketsAbiertos, ticketActivoIndex, crearTicket, cambiarTicket, cerrarTicket, setTicketActivo } = useStore();
   const cartTableRef = useTableScroll();
 
   const [scanner, setScanner] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [bultoItem, setBultoItem] = useState<CartItem | null>(null);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('divisas');
@@ -93,6 +93,13 @@ export default function Ventas() {
   const getProductStock = (id: string): number => {
     const p = products.find((pr) => pr.id === id);
     return p ? p.stock : 0;
+  };
+
+  const cart = ticketsAbiertos[ticketActivoIndex] ?? [];
+
+  const setCart = (updater: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
+    const next = typeof updater === 'function' ? (updater as (prev: CartItem[]) => CartItem[])(cart) : updater;
+    setTicketActivo(next);
   };
 
   const addToCart = (product: Product) => {
@@ -188,6 +195,11 @@ export default function Ventas() {
     setDeudorName('');
     setDeudorPhone('');
     scannerRef.current?.focus();
+  };
+
+  const handleCerrarTicket = (index: number) => {
+    cerrarTicket(index);
+    resetSale();
   };
 
   const handleProcessSale = () => {
@@ -306,6 +318,48 @@ export default function Ventas() {
         <span className="text-gold-500 font-medium">Módulo 2</span>
         <span>/</span>
         <span className="text-gray-600">Punto de Venta</span>
+      </div>
+
+      {/* Tab Bar — Multi-cliente */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto custom-scrollbar pb-1">
+        {ticketsAbiertos.map((t, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg rounded-b-sm cursor-pointer transition-all duration-200 whitespace-nowrap border-b-2 ${
+              i === ticketActivoIndex
+                ? 'bg-gold-400 text-white border-gold-500 shadow-gold-sm'
+                : 'bg-white text-gray-500 border-transparent hover:bg-gold-50 hover:text-gold-500'
+            }`}
+            onClick={() => { cambiarTicket(i); resetSale(); }}
+          >
+            <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="text-sm font-semibold">Orden {i + 1}</span>
+            {t.length > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                i === ticketActivoIndex ? 'bg-white/25 text-white' : 'bg-gold-100 text-gold-600'
+              }`}>
+                {t.length}
+              </span>
+            )}
+            {ticketsAbiertos.length > 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCerrarTicket(i); }}
+                className={`ml-1 rounded-full p-0.5 transition-colors ${
+                  i === ticketActivoIndex ? 'hover:bg-white/20' : 'hover:bg-gray-100'
+                }`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          onClick={() => { crearTicket(); resetSale(); }}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold text-gold-500 bg-gold-50 hover:bg-gold-100 transition-all duration-200 whitespace-nowrap"
+        >
+          <PlusIcon className="w-4 h-4" />
+          Nueva Orden
+        </button>
       </div>
 
       {/* Search / Scanner with autocomplete */}

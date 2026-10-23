@@ -16,7 +16,7 @@ import {
   Printer,
   FileText,
   FileSpreadsheet,
-  ShieldAlert,
+  Paperclip,
 } from 'lucide-react';
 import { useStore } from '@/context/StoreContext';
 import { useAuth } from '@/context/AuthContext';
@@ -54,7 +54,6 @@ function getItemLivePrice(item: CartItem, products: Product[]): number {
 export default function Cuentas() {
   const { cuentas, addCuenta, abonarCuenta, tasaBs, calcularDeudaTotal, products, exportarDeudoresExcel, logoBase64 } = useStore();
   const { user } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>('cobrar');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -64,6 +63,7 @@ export default function Cuentas() {
   const [abonoMetodo, setAbonoMetodo] = useState<MetodoPago>('efectivo_usd');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notaCuenta, setNotaCuenta] = useState<Cuenta | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Record<string, number[]>>({});
   const [nuevaCuenta, setNuevaCuenta] = useState({
     tipo: 'cobrar' as TabType,
     titular: '',
@@ -142,12 +142,39 @@ export default function Cuentas() {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const handleGenerarNota = (cuenta: Cuenta) => {
+  const handleGenerarNota = (e: React.MouseEvent, cuenta: Cuenta) => {
+    e.preventDefault();
+    e.stopPropagation();
     setNotaCuenta(cuenta);
     setTimeout(() => {
       window.print();
       setTimeout(() => setNotaCuenta(null), 500);
     }, 100);
+  };
+
+  const toggleItemSelection = (cuentaId: string, idx: number) => {
+    setSelectedItems((prev) => {
+      const current = prev[cuentaId] || [];
+      return {
+        ...prev,
+        [cuentaId]: current.includes(idx)
+          ? current.filter((i) => i !== idx)
+          : [...current, idx],
+      };
+    });
+  };
+
+  const handleAbonarSeleccionados = (cuenta: Cuenta) => {
+    const indices = selectedItems[cuenta.id] || [];
+    if (indices.length === 0) return;
+    const monto = indices.reduce((sum, idx) => {
+      const item = cuenta.items[idx];
+      if (!item) return sum;
+      return sum + getItemLivePrice(item, products) * item.quantity;
+    }, 0);
+    if (monto <= 0) return;
+    abonarCuenta(cuenta.id, monto, 'Efectivo $', indices);
+    setSelectedItems((prev) => ({ ...prev, [cuenta.id]: [] }));
   };
 
   const tabConfig = {
@@ -347,7 +374,7 @@ export default function Cuentas() {
                 {/* Expandable section */}
                 <div
                   className={`overflow-hidden transition-all duration-300 ${
-                    isExpanded ? 'max-h-[700px]' : 'max-h-0'
+                    isExpanded ? 'max-h-[800px]' : 'max-h-0'
                   }`}
                 >
                   <div className="px-5 pb-5">
@@ -360,41 +387,68 @@ export default function Cuentas() {
                       {cuenta.items.length === 0 ? (
                         <p className="text-xs text-gray-300 text-center py-4">Sin ítems registrados</p>
                       ) : (
-                        <div className="overflow-x-auto max-h-48 overflow-y-auto custom-scrollbar">
-                          <table className="w-full text-xs">
-                            <thead className="sticky top-0 bg-gray-50">
-                              <tr className="text-gray-400 uppercase">
-                                <th className="text-left py-2 px-2 font-semibold">Producto</th>
-                                <th className="text-left py-2 px-2 font-semibold whitespace-nowrap">Fecha/Hora</th>
-                                <th className="text-center py-2 px-2 font-semibold">Cant.</th>
-                                <th className="text-right py-2 px-2 font-semibold">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {cuenta.items.map((item, idx) => {
-                                const livePrice = getItemLivePrice(item, products);
-                                const totalLine = livePrice * item.quantity;
-                                return (
-                                  <tr key={idx} className="border-t border-gray-50">
-                                    <td className="py-2 px-2 text-gray-700 font-medium">
-                                      {item.product.name}
-                                      {item.isBulto && (
-                                        <span className="ml-1 text-gold-500">(B)</span>
-                                      )}
-                                    </td>
-                                    <td className="py-2 px-2 text-gray-400 whitespace-nowrap">
-                                      {cuenta.fecha}
-                                    </td>
-                                    <td className="py-2 px-2 text-center text-gray-600">{item.quantity}</td>
-                                    <td className="py-2 px-2 text-right font-semibold text-gray-700">
-                                      ${totalLine.toFixed(2)}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
+                        <>
+                          <div className="overflow-x-auto max-h-48 overflow-y-auto custom-scrollbar">
+                            <table className="w-full text-xs">
+                              <thead className="sticky top-0 bg-gray-50">
+                                <tr className="text-gray-400 uppercase">
+                                  <th className="text-center py-2 px-2 font-semibold w-8"></th>
+                                  <th className="text-left py-2 px-2 font-semibold">Producto</th>
+                                  <th className="text-left py-2 px-2 font-semibold whitespace-nowrap">Fecha/Hora</th>
+                                  <th className="text-center py-2 px-2 font-semibold">Cant.</th>
+                                  <th className="text-right py-2 px-2 font-semibold">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cuenta.items.map((item, idx) => {
+                                  const livePrice = getItemLivePrice(item, products);
+                                  const totalLine = livePrice * item.quantity;
+                                  const isChecked = (selectedItems[cuenta.id] || []).includes(idx);
+                                  const isItemPagado = item.pagado;
+                                  return (
+                                    <tr key={idx} className={`border-t border-gray-50 ${isItemPagado ? 'opacity-50' : ''}`}>
+                                      <td className="py-2 px-2 text-center">
+                                        {!isItemPagado && (
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => toggleItemSelection(cuenta.id, idx)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-3.5 h-3.5 rounded border-gray-300 text-gold-500 focus:ring-gold-400 cursor-pointer"
+                                          />
+                                        )}
+                                        {isItemPagado && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" />}
+                                      </td>
+                                      <td className="py-2 px-2 text-gray-700 font-medium">
+                                        {item.product.name}
+                                        {item.isBulto && (
+                                          <span className="ml-1 text-gold-500">(B)</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-2 text-gray-400 whitespace-nowrap">
+                                        {cuenta.fecha}
+                                      </td>
+                                      <td className="py-2 px-2 text-center text-gray-600">{item.quantity}</td>
+                                      <td className="py-2 px-2 text-right font-semibold text-gray-700">
+                                        ${totalLine.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {(selectedItems[cuenta.id] || []).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleAbonarSeleccionados(cuenta); }}
+                              className="w-full mt-3 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:shadow-md transition-all duration-300"
+                            >
+                              <HandCoins className="w-4 h-4" />
+                              Abonar Seleccionados ({(selectedItems[cuenta.id] || []).length})
+                            </button>
+                          )}
+                        </>
                       )}
 
                       {/* Action buttons */}
@@ -409,7 +463,8 @@ export default function Cuentas() {
                           </button>
                         )}
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleGenerarNota(cuenta); }}
+                          type="button"
+                          onClick={(e) => handleGenerarNota(e, cuenta)}
                           disabled={cuenta.items.length === 0}
                           className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-300 ${
                             cuenta.items.length > 0
@@ -431,101 +486,97 @@ export default function Cuentas() {
         </div>
       )}
 
-      {/* Print: Nota de Entrega — Diseño Gráfico Premium */}
+      {/* Print: Nota de Entrega — Réplica Exacta Gráfica */}
       {notaCuenta && (
-        <div className="hidden print:block absolute top-0 left-0 w-full h-full bg-white text-black p-8">
-          <div className="max-w-3xl mx-auto relative">
-            {/* Decorative bubbles */}
-            <div className="absolute -top-4 -right-4 w-32 h-32 rounded-full" style={{ backgroundColor: '#FFC300', opacity: 0.3 }} />
-            <div className="absolute top-10 -left-6 w-24 h-24 rounded-full" style={{ backgroundColor: '#2563EB', opacity: 0.2 }} />
-            <div className="absolute -bottom-2 right-10 w-20 h-20 rounded-full" style={{ backgroundColor: '#FFC300', opacity: 0.2 }} />
+        <div className="hidden print:block w-full bg-white font-sans relative overflow-hidden">
+          {/* Arte de fondo — formas geométricas */}
+          <div className="absolute -z-10 bg-blue-500 w-40 h-40 rounded-full" style={{ top: '-40px', left: '-40px', opacity: 0.15 }} />
+          <div className="absolute -z-10 bg-yellow-400 w-48 h-48 rounded-full" style={{ top: '-64px', right: '-64px', opacity: 0.15 }} />
+          <div className="absolute -z-10 bg-blue-500 w-40 h-40 rounded-full" style={{ bottom: '-40px', left: '-40px', opacity: 0.12 }} />
+          <div className="absolute -z-10 bg-yellow-400 w-48 h-48 rounded-full" style={{ bottom: '-64px', right: '-64px', opacity: 0.12 }} />
 
-            <div className="relative">
-              {/* Logo + Title */}
-              <div className="flex flex-col items-center mb-6">
-                {logoBase64 ? (
-                  <img src={logoBase64} alt="Logo" className="h-20 w-auto mb-3 object-contain" />
-                ) : (
-                  <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#D4AF37' }}>
-                    <FileText className="w-8 h-8 text-white" />
-                  </div>
-                )}
-                <span
-                  className="px-6 py-1.5 rounded-full text-sm font-bold tracking-widest text-white uppercase"
-                  style={{ backgroundColor: '#2e1065' }}
-                >
-                  Nota de Entrega
-                </span>
-                <p className="text-xs text-gray-500 mt-2">Documento sin valor fiscal</p>
-              </div>
+          {/* Clips decorativos */}
+          <Paperclip className="absolute text-blue-800 rotate-45" size={48} style={{ top: '20px', left: '60px' }} />
+          <Paperclip className="absolute text-blue-800 -rotate-12" size={48} style={{ top: '20px', right: '60px' }} />
 
-              {/* Client info with colored underlines */}
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase mb-1">Nombre</p>
-                  <p className="font-bold text-base pb-1 border-b-2" style={{ borderColor: '#2563EB' }}>{notaCuenta.titular}</p>
+          <div className="max-w-3xl mx-auto p-12 relative">
+            {/* Cabecera: Logo centrado + píldora */}
+            <div className="flex flex-col items-center mb-8">
+              {logoBase64 ? (
+                <img src={logoBase64} alt="Logo" className="h-24 w-auto mb-4 object-contain" />
+              ) : (
+                <div className="w-20 h-20 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#D4AF37' }}>
+                  <FileText className="w-10 h-10 text-white" />
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase mb-1">Teléfono</p>
-                  <p className="font-bold text-base pb-1 border-b-2" style={{ borderColor: '#2563EB' }}>
-                    {notaCuenta.telefono || '—'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Table with colored headers */}
-              <table className="w-full text-sm border-collapse mb-6">
-                <thead>
-                  <tr>
-                    <th className="text-center py-2 px-3 font-bold text-black" style={{ backgroundColor: '#FFC300' }}>
-                      CANTIDAD
-                    </th>
-                    <th className="text-left py-2 px-3 font-bold text-white" style={{ backgroundColor: '#0EA5E9' }}>
-                      ARTÍCULOS
-                    </th>
-                    <th className="text-center py-2 px-3 font-bold text-white" style={{ backgroundColor: '#2e1065' }}>
-                      FECHA Y HORA
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {notaCuenta.items.map((item, idx) => (
-                    <tr key={idx} className="border-b border-gray-200">
-                      <td className="py-2 px-3 text-center font-semibold">{item.quantity}</td>
-                      <td className="py-2 px-3 font-medium">{item.product.name}</td>
-                      <td className="py-2 px-3 text-center text-gray-600">{notaCuenta.fecha}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Observaciones */}
-              <div className="mb-6">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Observaciones</p>
-                <div className="space-y-3">
-                  <div className="border-b border-gray-300" />
-                  <div className="border-b border-gray-300" />
-                  <div className="border-b border-gray-300" />
-                </div>
-              </div>
-
-              {/* Entregado por */}
-              <div className="mb-8">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Entregado por</p>
-                <div className="border-b-2 border-gray-400 w-64" />
-              </div>
-
-              {/* Signature line */}
-              <div className="text-center mb-6">
-                <p className="text-sm text-gray-500">Firma del Cliente</p>
-                <div className="border-b border-gray-400 mx-auto mt-12 w-64" />
-              </div>
-
-              {/* Footer */}
-              <p className="text-center text-sm italic font-medium" style={{ color: '#2e1065' }}>
-                Gracias por confiar en SuminOfica
-              </p>
+              )}
+              <span className="rounded-full bg-indigo-900 text-white font-bold text-2xl px-10 py-2 mx-auto w-max">
+                NOTA DE ENTREGA
+              </span>
             </div>
+
+            {/* Datos del cliente con subrayado azul */}
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-1">Nombre:</p>
+                <p className="font-bold text-lg pb-1 border-b-2 border-blue-600">{notaCuenta.titular}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-1">Teléfono:</p>
+                <p className="font-bold text-lg pb-1 border-b-2 border-blue-600">
+                  {notaCuenta.telefono || '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Tabla paginada con cabeceras de colores sólidos */}
+            <table className="w-full break-inside-auto text-sm border-collapse mb-8">
+              <thead>
+                <tr>
+                  <th className="text-center py-3 px-4 font-bold text-black bg-yellow-400">
+                    CANTIDAD
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-white bg-blue-500">
+                    ARTÍCULOS
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-white bg-indigo-900">
+                    FECHA Y HORA
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {notaCuenta.items.map((item, idx) => (
+                  <tr key={idx} className="break-inside-avoid border-b border-blue-200">
+                    <td className="py-2.5 px-4 text-center font-semibold">{item.quantity}</td>
+                    <td className="py-2.5 px-4 font-medium">{item.product.name}</td>
+                    <td className="py-2.5 px-4 text-center text-gray-600">{notaCuenta.fecha}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Pie — flujo normal sin absolute */}
+            <div className="mb-8">
+              <p className="text-sm font-semibold text-gray-700 uppercase mb-3">OBSERVACIONES:</p>
+              <div className="space-y-4">
+                <div className="border-b border-blue-600" />
+                <div className="border-b border-blue-600" />
+                <div className="border-b border-blue-600" />
+              </div>
+            </div>
+
+            <div className="mb-10">
+              <p className="text-sm font-semibold text-gray-700 uppercase mb-1">ENTREGADO POR:</p>
+              <div className="border-b-2 border-gray-500 w-64" />
+            </div>
+
+            <div className="text-center mb-6">
+              <p className="text-sm text-gray-500">Firma del Cliente</p>
+              <div className="border-b border-gray-500 mx-auto mt-12 w-64" />
+            </div>
+
+            <p className="text-center text-sm italic font-medium" style={{ color: '#2e1065' }}>
+              Gracias por confiar en SuminOfica
+            </p>
           </div>
         </div>
       )}

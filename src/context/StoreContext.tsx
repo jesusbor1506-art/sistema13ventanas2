@@ -45,6 +45,19 @@ export function getPrecioActual(product: Product): number {
   return productSellPrice(product);
 }
 
+function getItemPrice(item: CartItem, productos: Product[]): number {
+  const currentProduct = productos.find((p) => p.id === item.product.id);
+  const product = currentProduct ?? item.product;
+  const sellPrice = productSellPrice(product);
+  let unitPrice = sellPrice;
+  if (item.isBulto && safeNum(product.precioBulto) > 0) {
+    unitPrice = safeNum(product.precioBulto);
+  } else if (!item.isBulto && item.quantity >= 6 && safeNum(product.precioMayor) > 0) {
+    unitPrice = safeNum(product.precioMayor);
+  }
+  return unitPrice * item.quantity;
+}
+
 interface StoreContextValue {
   tasaBs: number;
   tasaPts: number;
@@ -62,8 +75,15 @@ interface StoreContextValue {
 
   cuentas: Cuenta[];
   addCuenta: (c: Omit<Cuenta, 'id' | 'abono' | 'estado'>) => void;
-  abonarCuenta: (id: string, monto: number, metodo: string) => void;
+  abonarCuenta: (id: string, monto: number, metodo: string, itemIndices?: number[]) => void;
   calcularDeudaTotal: (cuenta: Cuenta) => number;
+
+  ticketsAbiertos: CartItem[][];
+  ticketActivoIndex: number;
+  crearTicket: () => void;
+  cambiarTicket: (index: number) => void;
+  cerrarTicket: (index: number) => void;
+  setTicketActivo: (items: CartItem[]) => void;
 
   ingresos: Ingreso[];
   registrarIngreso: (ingreso: Omit<Ingreso, 'id'>) => void;
@@ -188,6 +208,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     return [];
   });
+  const [ticketsAbiertos, setTicketsAbiertos] = useState<CartItem[][]>(() => {
+    const raw = localStorage.getItem('erp_tickets');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // fall through
+      }
+    }
+    return [[]];
+  });
+  const [ticketActivoIndex, setTicketActivoIndex] = useState(0);
 
   const persistProducts = (next: Product[]) => {
     setProducts(next);
@@ -279,11 +312,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('erp_ingresos');
   };
 
-  const abonarCuenta = (id: string, monto: number, metodo: string) => {
+  const abonarCuenta = (id: string, monto: number, metodo: string, itemIndices?: number[]) => {
     const cuenta = cuentas.find((c) => c.id === id);
     if (!cuenta) return;
 
-    const nuevoAbono = cuenta.abono + monto;
+    let montoReal = monto;
+    let itemsUpdate = cuenta.items;
+
+    if (itemIndices && itemIndices.length > 0) {
+      montoReal = itemIndices.reduce((sum, idx) => {
+        const item = cuenta.items[idx];
+        if (!item) return sum;
+        return sum + getItemPrice(item, products);
+      }, 0);
+      itemsUpdate = cuenta.items.map((item, idx) =>
+        itemIndices.includes(idx) ? { ...item, pagado: true } : item,
+      );
+    }
+
+    const nuevoAbono = cuenta.abono + montoReal;
     const deudaTotal = calcularDeudaTotal(cuenta, products);
 
     persistCuentas(
@@ -291,6 +338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         c.id === id
           ? {
               ...c,
+              items: itemsUpdate,
               abono: nuevoAbono,
               estado: nuevoAbono >= deudaTotal ? ('pagado' as const) : c.estado,
             }
@@ -299,14 +347,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     );
 
     registrarIngreso({
-      montoUSD: monto,
+      montoUSD: montoReal,
       costoUSD: 0,
-      gananciaUSD: monto,
+      gananciaUSD: montoReal,
       metodo,
       fecha: new Date().toLocaleString('es-VE'),
       origen: 'abono_deuda',
       descripcion: `Abono de ${cuenta.titular}`,
     });
+  };
+
+  const persistTickets = (next: CartItem[][]) => {
+    setTicketsAbiertos(next);
+    localStorage.setItem('erp_tickets', JSON.stringify(next));
+  };
+
+  const crearTicket = () => {
+    persistTickets([...ticketsAbiertos, []]);
+    setTicketActivoIndex(ticketsAbiertos.length);
+  };
+
+  const cambiarTicket = (index: number) => {
+    setTicketActivoIndex(index);
+  };
+
+  const cerrarTicket = (index: number) => {
+    if (ticketsAbiertos.length <= 1) {
+      persistTickets([[]]);
+      setTicketActivoIndex(0);
+      return;
+    }
+    const next = ticketsAbiertos.filter((_, i) => i !== index);
+    persistTickets(next);
+    setTicketActivoIndex(Math.max(0, Math.min(index, next.length - 1)));
+  };
+
+  const setTicketActivo = (items: CartItem[]) => {
+    const next = ticketsAbiertos.map((t, i) => (i === ticketActivoIndex ? items : t));
+    persistTickets(next);
   };
 
   const calcularDeudaTotalBound = (cuenta: Cuenta): number =>
@@ -399,6 +477,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         kardex,
         registrarKardex,
         exportarDeudoresExcel,
+        ticketsAbiertos,
+        ticketActivoIndex,
+        crearTicket,
+        cambiarTicket,
+        cerrarTicket,
+        setTicketActivo,
       }}
     >
       {children}
