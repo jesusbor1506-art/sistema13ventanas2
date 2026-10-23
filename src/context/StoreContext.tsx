@@ -11,6 +11,18 @@ export interface KardexEntry {
   usuario: string;
 }
 
+export interface CatalogoItem {
+  producto: string;
+  precio: number;
+}
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  colorHex: string;
+  catalogo: CatalogoItem[];
+}
+
 function safeNum(v: string | number | undefined, fallback = 0): number {
   if (v === undefined) return fallback;
   const n = typeof v === 'number' ? v : parseFloat(v);
@@ -96,6 +108,15 @@ interface StoreContextValue {
   kardex: KardexEntry[];
   registrarKardex: (accion: KardexEntry['accion'], detalle: string) => void;
   exportarDeudoresExcel: () => void;
+
+  proveedores: Proveedor[];
+  addProveedor: (p: Omit<Proveedor, 'id'>) => void;
+  updateProveedor: (id: string, updates: Partial<Omit<Proveedor, 'id'>>) => void;
+  deleteProveedor: (id: string) => void;
+  addCatalogoToProveedor: (id: string, items: CatalogoItem[]) => void;
+
+  apiKeyGemini: string;
+  setApiKeyGemini: (key: string) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -221,6 +242,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return [[]];
   });
   const [ticketActivoIndex, setTicketActivoIndex] = useState(0);
+  const [proveedores, setProveedores] = useState<Proveedor[]>(() => {
+    const raw = localStorage.getItem('erp_proveedores');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // fall through
+      }
+    }
+    return [];
+  });
+  const [apiKeyGemini, setApiKeyGeminiState] = useState<string>(() => {
+    return localStorage.getItem('erp_apikey_gemini') || '';
+  });
 
   const persistProducts = (next: Product[]) => {
     setProducts(next);
@@ -449,6 +485,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     XLSX.writeFile(wb, 'Deudores_SuminOfica.xlsx');
   };
 
+  const persistProveedores = (next: Proveedor[]) => {
+    setProveedores(next);
+    localStorage.setItem('erp_proveedores', JSON.stringify(next));
+  };
+
+  const addProveedor = (p: Omit<Proveedor, 'id'>) => {
+    persistProveedores([...proveedores, { ...p, id: `prov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }]);
+  };
+
+  const updateProveedor = (id: string, updates: Partial<Omit<Proveedor, 'id'>>) => {
+    persistProveedores(proveedores.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  };
+
+  const deleteProveedor = (id: string) => {
+    persistProveedores(proveedores.filter((p) => p.id !== id));
+  };
+
+  const addCatalogoToProveedor = (id: string, items: CatalogoItem[]) => {
+    persistProveedores(proveedores.map((p) => (p.id === id ? { ...p, catalogo: [...p.catalogo, ...items] } : p)));
+  };
+
+  const setApiKeyGemini = (key: string) => {
+    setApiKeyGeminiState(key);
+    localStorage.setItem('erp_apikey_gemini', key);
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -483,6 +545,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         cambiarTicket,
         cerrarTicket,
         setTicketActivo,
+        proveedores,
+        addProveedor,
+        updateProveedor,
+        deleteProveedor,
+        addCatalogoToProveedor,
+        apiKeyGemini,
+        setApiKeyGemini,
       }}
     >
       {children}
