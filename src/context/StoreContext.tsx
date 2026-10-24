@@ -173,6 +173,7 @@ function migrateIngresos(raw: string): Ingreso[] {
   } catch (error) {
     return [];
   }
+  
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [tasaBs, setTasaBsState] = useState(() => loadRate('erp_tasa_bs', 150));
   const [tasaPts, setTasaPtsState] = useState(() => loadRate('erp_tasa_pts', 2.5));
