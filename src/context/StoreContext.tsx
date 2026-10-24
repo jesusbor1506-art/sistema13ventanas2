@@ -168,7 +168,9 @@ function migrateIngresos(raw: string): Ingreso[] {
         gananciaUSD: safeNum(item.gananciaUSD as number),
         metodo: (item.metodo as string) || 'Efectivo'
       }));
-    }
+   }
+    return [];
+  } catch (error) {
     return [];
   }
 
