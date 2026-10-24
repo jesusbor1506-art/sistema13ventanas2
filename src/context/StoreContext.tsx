@@ -166,11 +166,11 @@ function migrateIngresos(raw: string): Ingreso[] {
         montoUSD: safeNum(item.montoUSD as number),
         costoUSD: safeNum(item.costoUSD as number),
         gananciaUSD: safeNum(item.gananciaUSD as number),
-        metodo: (item.metodo as string) || 'Efectivo',
-    // fall through
+        metodo: (item.metodo as string) || 'Efectivo'
+      }));
+    }
+    return [];
   }
-  return [];
-}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [tasaBs, setTasaBsState] = useState(() => loadRate('erp_tasa_bs', 150));
