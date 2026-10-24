@@ -227,6 +227,7 @@ export default function Ventas() {
           fecha: fechaNow,
           origen: 'venta_directa',
           descripcion: 'Venta de mostrador',
+          itemsVueltos: [...cart],
         });
       }
       if (bsInUsd > 0) {
@@ -238,6 +239,7 @@ export default function Ventas() {
           fecha: fechaNow,
           origen: 'venta_directa',
           descripcion: 'Venta de mostrador',
+          itemsVueltos: [...cart],
         });
       }
     } else {
@@ -255,6 +257,7 @@ export default function Ventas() {
         fecha: fechaNow,
         origen: 'venta_directa',
         descripcion: 'Venta de mostrador',
+        itemsVueltos: [...cart],
       });
     }
 

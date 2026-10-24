@@ -166,13 +166,7 @@ function migrateIngresos(raw: string): Ingreso[] {
         montoUSD: safeNum(item.montoUSD as number),
         costoUSD: safeNum(item.costoUSD as number),
         gananciaUSD: safeNum(item.gananciaUSD as number),
-        metodo: (item.metodo as string) || 'Efectivo $',
-        fecha: (item.fecha as string) || new Date().toLocaleString('es-VE'),
-        origen: (item.origen as string) || 'venta_directa',
-        descripcion: (item.descripcion as string) || 'Venta de mostrador',
-      }));
-    }
-  } catch {
+        metodo: (item.metodo as string) || 'Efectivo 
     // fall through
   }
   return [];
@@ -399,8 +393,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const crearTicket = () => {
-    persistTickets([...ticketsAbiertos, []]);
-    setTicketActivoIndex(ticketsAbiertos.length);
+    setTicketsAbiertos((prev) => {
+      const next = [...prev, []];
+      localStorage.setItem('erp_tickets', JSON.stringify(next));
+      return next;
+    });
+    setTicketActivoIndex((prev) => prev + 1);
   };
 
   const cambiarTicket = (index: number) => {

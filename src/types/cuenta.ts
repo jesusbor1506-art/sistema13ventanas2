@@ -20,6 +20,7 @@ export interface Ingreso {
   fecha: string;
   origen: string;
   descripcion: string;
+  itemsVueltos?: CartItem[];
 }
 
 export interface CierreDiario {
