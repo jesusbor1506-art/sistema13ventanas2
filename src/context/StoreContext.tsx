@@ -166,7 +166,7 @@ function migrateIngresos(raw: string): Ingreso[] {
         montoUSD: safeNum(item.montoUSD as number),
         costoUSD: safeNum(item.costoUSD as number),
         gananciaUSD: safeNum(item.gananciaUSD as number),
-        metodo: (item.metodo as string) || 'Efectivo,
+        metodo: (item.metodo as string) || 'Efectivo',
     // fall through
   }
   return [];
